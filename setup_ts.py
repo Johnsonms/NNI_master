@@ -24,7 +24,7 @@ from zipfile import ZipFile
 
 node_version = 'v16.3.0'
 yarn_version = 'v1.22.10'
-
+jupyter_lab_version = os.popen('jupyter lab --version').read().rstrip('\n').split('.')[0]
 
 def build(release):
     """
@@ -39,11 +39,13 @@ def build(release):
     if release or not os.environ.get('GLOBAL_TOOLCHAIN'):
         download_toolchain()
     prepare_nni_node()
+    update_package()
     compile_ts()
     if release or sys.platform == 'win32':
         copy_nni_node(release)
     else:
         symlink_nni_node()
+    restore_package()
 
 def clean(clean_all=False):
     """
@@ -119,6 +121,24 @@ def download_toolchain():
     shutil.rmtree('toolchain/yarn', ignore_errors=True)
     Path(f'toolchain/yarn-{yarn_version}').rename('toolchain/yarn')
 
+def update_package():
+     if jupyter_lab_version == '2':
+        package_json = json.load(open('ts/jupyter_extension/package.json'))
+        json.dump(package_json, open('ts/jupyter_extension/.package_default.json', 'w'), indent=4)
+
+        package_json['scripts']['build'] = 'tsc && jupyter labextension link .'
+        package_json['dependencies']['@jupyterlab/application'] = '^2.3.0'
+        package_json['dependencies']['@jupyterlab/launcher'] = '^2.3.0'
+
+        package_json['jupyterlab']['outputDir'] = 'build'
+        json.dump(package_json, open('ts/jupyter_extension/package.json', 'w'), indent=4)
+        print(f'updated package.json with {json.dumps(package_json, indent=4)}')
+
+def restore_package():
+    if jupyter_lab_version == '2':
+        package_json = json.load(open('ts/jupyter_extension/.package_default.json'))
+        print(f'stored package.json with {json.dumps(package_json, indent=4)}')
+        json.dump(package_json, open('ts/jupyter_extension/package.json', 'w'), indent=4)
 
 def prepare_nni_node():
     """
@@ -168,7 +188,11 @@ def symlink_nni_node():
 
     _symlink('ts/webui/build', 'nni_node/static')
 
-    _symlink('ts/jupyter_extension/dist', 'nni_node/jupyter-extension')
+    if jupyter_lab_version == '2':
+        _symlink('ts/jupyter_extension/build', 'nni_node/jupyter-extension')
+        _symlink(sys.exec_prefix+'/share/jupyter/lab/extensions', 'nni_node/jupyter-extension/extensions')
+    else:
+        _symlink('ts/jupyter_extension/dist', 'nni_node/jupyter-extension')
 
 
 def copy_nni_node(version):
@@ -199,7 +223,11 @@ def copy_nni_node(version):
 
     shutil.copytree('ts/webui/build', 'nni_node/static')
 
-    shutil.copytree('ts/jupyter_extension/dist', 'nni_node/jupyter-extension')
+    if jupyter_lab_version == '2':
+        shutil.copytree('ts/jupyter_extension/build', 'nni_node/jupyter-extension/build')
+        shutil.copytree(sys.exec_prefix+'/share/jupyter/lab/extensions', 'nni_node/jupyter-extension/extensions')
+    else:
+        shutil.copytree('ts/jupyter_extension/dist', 'nni_node/jupyter-extension')
 
 
 _yarn_env = dict(os.environ)

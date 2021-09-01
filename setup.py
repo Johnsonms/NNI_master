@@ -64,6 +64,7 @@ from setuptools.command.develop import develop
 import setup_ts
 
 release = os.environ.get('NNI_RELEASE')
+jupyter_lab_version = os.popen('jupyter lab --version').read().rstrip('\n').split('.')[0]
 
 def _setup():
     setuptools.setup(
@@ -91,6 +92,8 @@ def _setup():
             'nni_node': _find_node_files()  # note: this does not work before building
         },
 
+        data_files = _get_data_files(),
+
         python_requires = '>=3.6',
         install_requires = _read_requirements_txt('dependencies/required.txt'),
         extras_require = {
@@ -115,6 +118,12 @@ def _setup():
         }
     )
 
+def _get_data_files():
+    data_files = []
+    if jupyter_lab_version == '2':
+        extension_file = glob.glob("nni_node/jupyter-extension/extensions/nni-jupyter-extension*.tgz")
+        data_files = [('share/jupyter/lab/extensions', extension_file)]
+    return data_files
 
 def _find_python_packages():
     packages = []
